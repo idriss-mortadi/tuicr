@@ -62,6 +62,19 @@ pub struct DiffState {
     pub viewport_height: usize, // Set during render
 }
 
+/// Represents a comment location for deletion
+enum CommentLocation {
+    FileComment {
+        path: std::path::PathBuf,
+        index: usize,
+    },
+    LineComment {
+        path: std::path::PathBuf,
+        line: u32,
+        index: usize,
+    },
+}
+
 impl App {
     pub fn new() -> Result<Self> {
         let repo_info = RepoInfo::discover()?;
@@ -409,6 +422,107 @@ impl App {
         }
 
         None
+    }
+
+    /// Find the comment at the current cursor position
+    fn find_comment_at_cursor(&self) -> Option<CommentLocation> {
+        let target = self.diff_state.cursor_line;
+        let mut line_idx = 0;
+
+        for file in &self.diff_files {
+            let path = file.display_path().clone();
+
+            // File header
+            line_idx += 1;
+
+            // File comments - check if cursor is on one
+            if let Some(review) = self.session.files.get(&path) {
+                for (idx, comment) in review.file_comments.iter().enumerate() {
+                    let comment_lines = Self::comment_display_lines(comment);
+                    if target >= line_idx && target < line_idx + comment_lines {
+                        return Some(CommentLocation::FileComment { path, index: idx });
+                    }
+                    line_idx += comment_lines;
+                }
+            }
+
+            if file.is_binary || file.hunks.is_empty() {
+                line_idx += 1;
+            } else {
+                let line_comments = self
+                    .session
+                    .files
+                    .get(&path)
+                    .map(|r| r.line_comments.clone())
+                    .unwrap_or_default();
+
+                for hunk in &file.hunks {
+                    // Hunk header
+                    line_idx += 1;
+
+                    for diff_line in &hunk.lines {
+                        // Skip the diff line itself
+                        line_idx += 1;
+
+                        // Check line comments
+                        let source_line = diff_line.new_lineno.or(diff_line.old_lineno);
+                        if let Some(ln) = source_line {
+                            if let Some(comments) = line_comments.get(&ln) {
+                                for (idx, comment) in comments.iter().enumerate() {
+                                    let comment_lines = Self::comment_display_lines(comment);
+                                    if target >= line_idx && target < line_idx + comment_lines {
+                                        return Some(CommentLocation::LineComment {
+                                            path,
+                                            line: ln,
+                                            index: idx,
+                                        });
+                                    }
+                                    line_idx += comment_lines;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Spacing line
+            line_idx += 1;
+        }
+
+        None
+    }
+
+    /// Delete the comment at the current cursor position, if any
+    /// Returns true if a comment was deleted
+    pub fn delete_comment_at_cursor(&mut self) -> bool {
+        let location = self.find_comment_at_cursor();
+
+        match location {
+            Some(CommentLocation::FileComment { path, index }) => {
+                if let Some(review) = self.session.get_file_mut(&path) {
+                    review.file_comments.remove(index);
+                    self.dirty = true;
+                    self.set_message("Comment deleted");
+                    return true;
+                }
+            }
+            Some(CommentLocation::LineComment { path, line, index }) => {
+                if let Some(review) = self.session.get_file_mut(&path) {
+                    if let Some(comments) = review.line_comments.get_mut(&line) {
+                        comments.remove(index);
+                        if comments.is_empty() {
+                            review.line_comments.remove(&line);
+                        }
+                        self.dirty = true;
+                        self.set_message(format!("Comment on line {} deleted", line));
+                        return true;
+                    }
+                }
+            }
+            None => {}
+        }
+
+        false
     }
 
     pub fn enter_command_mode(&mut self) {

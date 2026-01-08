@@ -50,6 +50,8 @@ fn main() -> anyhow::Result<()> {
 
     // Track pending z command for zz centering
     let mut pending_z = false;
+    // Track pending d command for dd delete
+    let mut pending_d = false;
 
     // Main loop
     loop {
@@ -66,6 +68,18 @@ fn main() -> anyhow::Result<()> {
                     pending_z = false;
                     if key.code == crossterm::event::KeyCode::Char('z') {
                         app.center_cursor();
+                        continue;
+                    }
+                    // Otherwise fall through to normal handling
+                }
+
+                // Handle pending d command for dd delete comment
+                if pending_d {
+                    pending_d = false;
+                    if key.code == crossterm::event::KeyCode::Char('d') {
+                        if !app.delete_comment_at_cursor() {
+                            app.set_message("No comment at cursor");
+                        }
                         continue;
                     }
                     // Otherwise fall through to normal handling
@@ -93,6 +107,9 @@ fn main() -> anyhow::Result<()> {
                     Action::ScrollRight(n) => app.scroll_right(n),
                     Action::PendingZCommand => {
                         pending_z = true;
+                    }
+                    Action::PendingDCommand => {
+                        pending_d = true;
                     }
                     Action::GoToTop => app.jump_to_file(0),
                     Action::GoToBottom => {

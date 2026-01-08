@@ -30,7 +30,7 @@ pub enum Action {
     AddLineComment,
     AddFileComment,
     EditComment,
-    DeleteComment,
+    PendingDCommand,
 
     // Session
     Quit,
@@ -102,7 +102,7 @@ fn map_normal_mode(key: KeyEvent) -> Action {
         (KeyCode::Char('c'), KeyModifiers::NONE) => Action::AddLineComment,
         (KeyCode::Char('C'), _) => Action::AddFileComment,
         (KeyCode::Char('e'), KeyModifiers::NONE) => Action::EditComment,
-        (KeyCode::Char('d'), KeyModifiers::NONE) => Action::DeleteComment,
+        (KeyCode::Char('d'), KeyModifiers::NONE) => Action::PendingDCommand,
 
         // Mode changes (use _ for shifted characters like : and ?)
         (KeyCode::Char(':'), _) => Action::EnterCommandMode,

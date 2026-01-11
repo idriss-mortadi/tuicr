@@ -96,6 +96,7 @@ tuicr
 | Key | Action |
 |-----|--------|
 | `Tab` | Toggle focus between file list and diff |
+| `;e` | Toggle file list visibility |
 | `Enter` | Select file (when file list is focused) |
 
 #### Review Actions
